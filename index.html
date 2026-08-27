@@ -28,6 +28,7 @@
     background:var(--bg);color:var(--text);
     font-family:var(--sans);font-size:16px;line-height:1.65;
     -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
   }
   ::selection{background:rgba(255,74,31,.25)}
   a{color:inherit;text-decoration:none}
@@ -36,7 +37,8 @@
 
   /* background shader */
   #gl{
-    position:fixed;inset:0;width:100%;height:100%;
+    position:fixed;inset:0;
+    width:100vw;height:100vh;height:100dvh;
     z-index:-1;pointer-events:none;display:block;
   }
 
@@ -53,6 +55,9 @@
   .nav-right{display:flex;align-items:center;gap:20px;font-family:var(--mono);font-size:13px;color:var(--muted)}
   .nav-right a:hover{color:var(--heading)}
   .ver{border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:12px}
+  @supports not (background:color-mix(in srgb,red 50%,transparent)){
+    nav{background:rgba(16,16,20,.88)}
+  }
 
   /* hero */
   .hero{padding:88px 0 72px}
@@ -68,7 +73,9 @@
     display:inline-flex;align-items:center;gap:16px;cursor:pointer;
     font-family:var(--mono);font-size:13.5px;color:var(--text);
     background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 14px;
+    max-width:100%;min-width:0;
   }
+  .cmd .t{overflow-wrap:anywhere}
   .cmd:hover{border-color:#3a3a44}
   .cmd .c{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
   .link-cta{font-family:var(--mono);font-size:13.5px;color:var(--accent)}
@@ -131,6 +138,7 @@
   td.done::after{content:" done";font-family:var(--mono);font-size:11.5px;color:#7bc47f}
   td.open::after{content:" open";font-family:var(--mono);font-size:11.5px;color:var(--muted)}
   .table-card{border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
   .fineprint{margin-top:14px;font-size:13px;color:var(--muted)}
   .fineprint code{font-family:var(--mono);font-size:12.5px;color:var(--text)}
 
@@ -154,6 +162,21 @@
     .feat-list li{grid-template-columns:1fr;gap:4px}
     .crate-row{grid-template-columns:1fr;gap:2px}
     .hero{padding:56px 0 48px}
+    .wrap{padding:0 18px}
+    .nav-right{gap:14px;font-size:12px}
+    .nav-right .lnk{display:none}      /* drop crates/parity links; keep version + source */
+    .ver{font-size:10.5px;padding:2px 6px;white-space:nowrap}
+    .term{font-size:11.5px}
+    .term-body{padding:14px 12px 18px;min-height:0}
+    section{padding:48px 0}
+    h2{font-size:21px}
+    .lede{font-size:15.5px}
+    .actions{gap:10px}
+    .cmd{font-size:11.5px;padding:9px 11px;width:100%}
+    th,td{padding:9px 10px;font-size:13px}
+    td.num{font-size:12px}
+    .build{font-size:11.5px;overflow-wrap:anywhere}
+    .foot{flex-direction:column;align-items:flex-start;gap:8px}
   }
 </style>
 </head>
@@ -166,8 +189,8 @@
     <a class="logo" href="#">pi<em>-rust</em></a>
     <div class="nav-right">
       <span class="ver">v0.84.2 · 5cd93f6</span>
-      <a href="#crates">crates</a>
-      <a href="#parity">parity</a>
+      <a class="lnk" href="#crates">crates</a>
+      <a class="lnk" href="#parity">parity</a>
       <a href="https://github.com/earendil-works/pi" target="_blank" rel="noopener">source ↗</a>
     </div>
   </div>
@@ -181,8 +204,8 @@
     binary with no Node runtime.
   </p>
   <div class="actions">
-    <span class="cmd" onclick="copyCmd('cargo install --path crates/pi-coding-agent')">
-      cargo install --path crates/pi-coding-agent <span class="c">copy</span>
+    <span class="cmd" onclick="copyCmd('cargo install --path crates/pi-coding-agent', this)">
+      <span class="t">cargo install --path crates/pi-coding-agent</span> <span class="c">copy</span>
     </span>
     <a class="link-cta" href="#parity">current parity status →</a>
   </div>
@@ -249,7 +272,7 @@
     Two ledgers are kept separate on purpose: what has been converted, and what has been proven
     equivalent. Behavioral parity is not claimed until the exhaustive audit passes.
   </p>
-  <div class="table-card">
+  <div class="table-card"><div class="table-scroll">
     <table>
       <tr><th>measure</th><th>value</th><th>state</th></tr>
       <tr><td>Source / conversion ledger</td><td class="num">166 / 166 · 100%</td><td class="done"></td></tr>
@@ -260,7 +283,7 @@
       <tr><td>TUI visual / interaction parity</td><td class="num">0 / 52</td><td class="open"></td></tr>
       <tr><td>Whole-product behavioral parity</td><td class="num">not scored</td><td class="open"></td></tr>
     </table>
-  </div>
+  </div></div>
   <p class="fineprint">
     Figures are generated from the machine-validated checkpoint in <code>docs/PARITY-DASHBOARD.md</code>
     and <code>docs/EXHAUSTIVE-PARITY-INVENTORY.md</code>. Tests do not count as visual parity until the
@@ -312,13 +335,29 @@
   }
   setTimeout(typeNext, 500);
 
-  function copyCmd(cmd){
-    navigator.clipboard.writeText(cmd).then(()=>{
-      const t=document.getElementById('toast');
-      t.classList.add('show');
-      clearTimeout(window.__tt);
-      window.__tt=setTimeout(()=>t.classList.remove('show'),1400);
-    });
+  function showToast(){
+    const t=document.getElementById('toast');
+    t.classList.add('show');
+    clearTimeout(window.__tt);
+    window.__tt=setTimeout(()=>t.classList.remove('show'),1400);
+  }
+  function copyCmd(cmd, el){
+    // navigator.clipboard requires a secure context; fall back to execCommand
+    if(navigator.clipboard && window.isSecureContext){
+      navigator.clipboard.writeText(cmd).then(showToast, ()=>fallbackCopy(cmd));
+    }else{
+      fallbackCopy(cmd);
+    }
+  }
+  function fallbackCopy(cmd){
+    const ta=document.createElement('textarea');
+    ta.value=cmd;
+    ta.setAttribute('readonly','');
+    ta.style.cssText='position:fixed;top:-100px;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    try{ document.execCommand('copy'); showToast(); }catch(e){}
+    ta.remove();
   }
 </script>
 
@@ -443,19 +482,25 @@
   const uMouse  = gl.getUniformLocation(prog, 'uMouse');
   const uMouseActive = gl.getUniformLocation(prog, 'uMouseActive');
 
-  let dpr = 1, hidden = false;
+  let hidden = false;
   function resize(){
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    // cap fill-rate: shader is ~5 octaves of fbm
-    const scale = innerWidth > 1400 ? dpr * 0.75 : dpr;
-    canvas.width  = Math.floor(innerWidth  * scale);
-    canvas.height = Math.floor(innerHeight * scale);
-    canvas.style.width  = innerWidth + 'px';
-    canvas.style.height = innerHeight + 'px';
-    gl.viewport(0, 0, canvas.width, canvas.height);
+    // iOS/Android report stale innerHeight while the URL bar animates —
+    // use layout viewport instead, which is stable.
+    const w = canvas.clientWidth  || window.innerWidth;
+    const h = canvas.clientHeight || window.innerHeight;
+    // phones: DPR 3+ with a fullscreen fbm shader melts batteries — cap at ~2 effective
+    const dpr = Math.min(window.devicePixelRatio || 1, matchMedia('(pointer:coarse)').matches ? 1.5 : 2);
+    const scale = w > 1400 ? dpr * 0.75 : dpr;
+    const W = Math.max(1, Math.floor(w * scale));
+    const H = Math.max(1, Math.floor(h * scale));
+    if(canvas.width !== W || canvas.height !== H){
+      canvas.width = W; canvas.height = H;
+      gl.viewport(0, 0, W, H);
+    }
   }
   resize();
   addEventListener('resize', resize);
+  addEventListener('scroll', resize, {passive:true}); // catches iOS URL-bar height changes
 
   document.addEventListener('visibilitychange', () => { hidden = document.hidden; });
 
@@ -464,23 +509,40 @@
     scrollTarget = scrollY / Math.max(1, document.body.scrollHeight - innerHeight);
   }, {passive:true});
 
-  // mouse: raw target -> smoothed value; activity decays back to 0 at rest
+  // pointer parallax — desktop only; ignore touch so taps don't jump the field
   const mTarget = {x:0, y:0};
   const mSmooth = {x:0, y:0};
   let activeTarget = 0;
-  addEventListener('pointermove', (e) => {
-    const min = Math.min(innerWidth, innerHeight);
-    // same space as `pos` in the shader, y flipped to match gl_FragCoord
-    mTarget.x = (e.clientX - innerWidth  * 0.5) / min;
-    mTarget.y = (innerHeight * 0.5 - e.clientY) / min;
-    activeTarget = 1;
-  }, {passive:true});
+  if(!matchMedia('(pointer:coarse)').matches){
+    addEventListener('pointermove', (e) => {
+      const min = Math.min(innerWidth, innerHeight);
+      // same space as `pos` in the shader, y flipped to match gl_FragCoord
+      mTarget.x = (e.clientX - innerWidth  * 0.5) / min;
+      mTarget.y = (innerHeight * 0.5 - e.clientY) / min;
+      activeTarget = 1;
+    }, {passive:true});
+  }
   let active = 0;
 
   const t0 = performance.now();
+  let lastFrame = t0, lowFpsStreak = 0;
   function frame(now){
     requestAnimationFrame(frame);
     if(hidden) return;
+
+    // adaptive resolution: if we can't hold ~40fps, drop render scale once
+    const dt = now - lastFrame; lastFrame = now;
+    if(dt > 25){
+      if(++lowFpsStreak > 45 && canvas.width > 640){
+        canvas.width  = Math.floor(canvas.width  * 0.7);
+        canvas.height = Math.floor(canvas.height * 0.7);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        lowFpsStreak = 0;
+      }
+    }else{
+      lowFpsStreak = 0;
+    }
+
     scrollSmooth += (scrollTarget - scrollSmooth) * 0.05;
     mSmooth.x += (mTarget.x - mSmooth.x) * 0.04;
     mSmooth.y += (mTarget.y - mSmooth.y) * 0.04;
