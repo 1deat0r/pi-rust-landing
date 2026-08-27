@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pi-rust — a Rust port of the pi coding agent</title>
+<meta name="description" content="A 1:1 in-progress Rust port of the pi coding agent (v0.84.2). Same CLI surface, session formats, provider behavior, and wire contracts. Native binary, no Node runtime.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#101014;
+    --surface:#16161b;
+    --surface-2:#1b1b21;
+    --border:#26262e;
+    --text:#d6d6d9;
+    --heading:#ececed;
+    --muted:#8f8f98;
+    --accent:#ff4a1f;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+    --sans:"IBM Plex Sans",system-ui,sans-serif;
+    --maxw:960px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);color:var(--text);
+    font-family:var(--sans);font-size:16px;line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:rgba(255,74,31,.25)}
+  a{color:inherit;text-decoration:none}
+
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+
+  /* background shader */
+  #gl{
+    position:fixed;inset:0;width:100%;height:100%;
+    z-index:-1;pointer-events:none;display:block;
+  }
+
+  /* nav */
+  nav{
+    position:sticky;top:0;z-index:10;
+    background:color-mix(in srgb,var(--bg) 88%,transparent);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--border);
+  }
+  .nav-inner{display:flex;align-items:center;justify-content:space-between;height:56px}
+  .logo{font-family:var(--mono);font-weight:700;font-size:15px;color:var(--heading)}
+  .logo em{color:var(--accent);font-style:normal}
+  .nav-right{display:flex;align-items:center;gap:20px;font-family:var(--mono);font-size:13px;color:var(--muted)}
+  .nav-right a:hover{color:var(--heading)}
+  .ver{border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:12px}
+
+  /* hero */
+  .hero{padding:88px 0 72px}
+  h1{
+    font-size:clamp(30px,4.6vw,44px);line-height:1.2;font-weight:600;
+    color:var(--heading);letter-spacing:-.015em;margin-bottom:20px;max-width:22ch;
+  }
+  h1 span{color:var(--accent)}
+  .lede{max-width:60ch;color:var(--muted);font-size:17px;margin-bottom:36px}
+  .lede code{font-family:var(--mono);font-size:15px;color:var(--text)}
+  .actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .cmd{
+    display:inline-flex;align-items:center;gap:16px;cursor:pointer;
+    font-family:var(--mono);font-size:13.5px;color:var(--text);
+    background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 14px;
+  }
+  .cmd:hover{border-color:#3a3a44}
+  .cmd .c{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+  .link-cta{font-family:var(--mono);font-size:13.5px;color:var(--accent)}
+  .link-cta:hover{text-decoration:underline}
+
+  /* terminal */
+  .term{
+    margin-top:56px;background:#0c0c10;border:1px solid var(--border);
+    border-radius:8px;overflow:hidden;font-family:var(--mono);font-size:13px;line-height:1.8;
+  }
+  .term-bar{
+    display:flex;align-items:center;gap:7px;padding:10px 14px;
+    border-bottom:1px solid var(--border);color:var(--muted);font-size:11.5px;
+  }
+  .t-dot{width:9px;height:9px;border-radius:50%;background:#2d2d35}
+  .t-dot.on{background:#3c3c46}
+  .term-bar .title{margin-left:8px}
+  .term-body{padding:18px 18px 22px;min-height:216px}
+  .ln{white-space:pre-wrap;word-break:break-word}
+  .dim{color:var(--muted)}
+  .prompt::before{content:"$ ";color:var(--accent)}
+  .ok{color:#7bc47f}
+  .warn{color:#e0b45c}
+
+  /* sections */
+  section{padding:64px 0;border-top:1px solid var(--border)}
+  .sec-label{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px}
+  h2{font-size:24px;font-weight:600;color:var(--heading);letter-spacing:-.01em;margin-bottom:10px}
+  .sec-sub{color:var(--muted);max-width:62ch;margin-bottom:36px}
+
+  /* features — plain list, not cards */
+  .feat-list{list-style:none;display:grid;gap:0}
+  .feat-list li{
+    display:grid;grid-template-columns:200px 1fr;gap:24px;
+    padding:18px 0;border-bottom:1px solid var(--border);align-items:baseline;
+  }
+  .feat-list li:last-child{border-bottom:none}
+  .feat-list b{font-weight:500;color:var(--heading);font-size:15px}
+  .feat-list p{color:var(--muted);font-size:15px}
+  .feat-list code{font-family:var(--mono);font-size:13.5px;color:var(--text)}
+
+  /* crates */
+  .crates{border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .crate-row{
+    display:grid;grid-template-columns:210px 1fr;gap:20px;
+    padding:12px 18px;border-bottom:1px solid var(--border);
+    font-size:14.5px;
+  }
+  .crate-row:last-child{border-bottom:none}
+  .crate-row.head{background:var(--surface);font-family:var(--mono);font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .crate-name{font-family:var(--mono);font-size:13.5px;color:var(--heading)}
+  .crate-desc{color:var(--muted)}
+
+  /* parity table */
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--border)}
+  th{font-family:var(--mono);font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:500;background:var(--surface)}
+  tr:last-child td{border-bottom:none}
+  td.num{font-family:var(--mono);font-size:13.5px;color:var(--heading);white-space:nowrap}
+  td.done::after{content:" done";font-family:var(--mono);font-size:11.5px;color:#7bc47f}
+  td.open::after{content:" open";font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+  .table-card{border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .fineprint{margin-top:14px;font-size:13px;color:var(--muted)}
+  .fineprint code{font-family:var(--mono);font-size:12.5px;color:var(--text)}
+
+  /* build + footer */
+  .build{font-family:var(--mono);font-size:13.5px;color:var(--muted);line-height:2.1}
+  .build .p{color:var(--accent)}
+  .build code{color:var(--text)}
+  footer{border-top:1px solid var(--border);padding:28px 0 40px;margin-top:24px}
+  .foot{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);font-family:var(--mono)}
+  .foot a:hover{color:var(--heading)}
+
+  #toast{
+    position:fixed;bottom:24px;left:50%;transform:translate(-50%,12px);
+    background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+    font-family:var(--mono);font-size:12.5px;padding:8px 16px;border-radius:6px;
+    opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:99;
+  }
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+
+  @media(max-width:640px){
+    .feat-list li{grid-template-columns:1fr;gap:4px}
+    .crate-row{grid-template-columns:1fr;gap:2px}
+    .hero{padding:56px 0 48px}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gl" aria-hidden="true"></canvas>
+
+<nav>
+  <div class="wrap nav-inner">
+    <a class="logo" href="#">pi<em>-rust</em></a>
+    <div class="nav-right">
+      <span class="ver">v0.84.2 · 5cd93f6</span>
+      <a href="#crates">crates</a>
+      <a href="#parity">parity</a>
+      <a href="https://github.com/earendil-works/pi" target="_blank" rel="noopener">source ↗</a>
+    </div>
+  </div>
+</nav>
+
+<header class="wrap hero">
+  <h1>A <span>1:1 Rust port</span> of the pi coding agent.</h1>
+  <p class="lede">
+    In progress, pinned to upstream commit <code>5cd93f6</code>. The target is the same CLI surface,
+    session formats, provider behavior, tools, and wire contracts — in idiomatic Rust, as one native
+    binary with no Node runtime.
+  </p>
+  <div class="actions">
+    <span class="cmd" onclick="copyCmd('cargo install --path crates/pi-coding-agent')">
+      cargo install --path crates/pi-coding-agent <span class="c">copy</span>
+    </span>
+    <a class="link-cta" href="#parity">current parity status →</a>
+  </div>
+
+  <div class="term">
+    <div class="term-bar">
+      <span class="t-dot on"></span><span class="t-dot on"></span><span class="t-dot"></span>
+      <span class="title">pi · release build</span>
+    </div>
+    <div class="term-body" id="term"></div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<section id="what">
+  <div class="sec-label">What this is</div>
+  <h2>The port, concretely.</h2>
+  <ul class="feat-list">
+    <li>
+      <b>Native binary</b>
+      <p>Launches from <code>pi</code> or <code>pi-rust</code>. Release builds are optimized; the installed command resolves directly to the Rust binary. No interpreter, no bundle, no version drift.</p>
+    </li>
+    <li>
+      <b>Provider auth works today</b>
+      <p><code>/login openai-codex</code> reaches the real browser OAuth URL and cancels cleanly. A stored Codex credential completed two print turns and two interactive PTY turns. Bracketed-pasted Qwen API keys are masked, persisted, and removable via <code>/logout</code>.</p>
+    </li>
+    <li>
+      <b>Compatibility where it counts</b>
+      <p>Session formats, RPC messages, and transport behavior mirror upstream so existing sessions and integrations survive the port.</p>
+    </li>
+    <li>
+      <b>TUI under a 52-capability contract</b>
+      <p>Every pane, keybinding, theme, and interaction is tracked against official Pi, including Kitty CSI-u input and Bash-completion regressions. Both are release-tested; the full workspace release suite is green.</p>
+    </li>
+    <li>
+      <b>Rust-only distribution</b>
+      <p>Zero JS/TS executable source files in the shipped tree (generated Rustdoc excluded).</p>
+    </li>
+  </ul>
+</section>
+
+<section id="crates">
+  <div class="sec-label">Workspace</div>
+  <h2>Ten crates.</h2>
+  <div class="crates">
+    <div class="crate-row head"><span>crate</span><span>owns</span></div>
+    <div class="crate-row"><span class="crate-name">pi-ai</span><span class="crate-desc">model catalog, providers, streaming completions</span></div>
+    <div class="crate-row"><span class="crate-name">pi-agent</span><span class="crate-desc">agent runtime: loops, tools, context</span></div>
+    <div class="crate-row"><span class="crate-name">pi-tui</span><span class="crate-desc">terminal UI, themes, editor, keybindings</span></div>
+    <div class="crate-row"><span class="crate-name">pi-protocol</span><span class="crate-desc">wire contracts, RPC schemas, session formats</span></div>
+    <div class="crate-row"><span class="crate-name">pi-client / pi-server</span><span class="crate-desc">remote and embedded control</span></div>
+    <div class="crate-row"><span class="crate-name">pi-session-backends</span><span class="crate-desc">transcript and state persistence</span></div>
+    <div class="crate-row"><span class="crate-name">pi-telemetry</span><span class="crate-desc">diagnostics aligned with upstream events</span></div>
+    <div class="crate-row"><span class="crate-name">pi-evals</span><span class="crate-desc">behavioral evaluation harness</span></div>
+    <div class="crate-row"><span class="crate-name">pi-coding-agent</span><span class="crate-desc">the <code>pi</code> binary: CLI, extensions, gates</span></div>
+  </div>
+</section>
+
+<section id="parity">
+  <div class="sec-label">Parity</div>
+  <h2>Current checkpoint.</h2>
+  <p class="sec-sub">
+    Two ledgers are kept separate on purpose: what has been converted, and what has been proven
+    equivalent. Behavioral parity is not claimed until the exhaustive audit passes.
+  </p>
+  <div class="table-card">
+    <table>
+      <tr><th>measure</th><th>value</th><th>state</th></tr>
+      <tr><td>Source / conversion ledger</td><td class="num">166 / 166 · 100%</td><td class="done"></td></tr>
+      <tr><td>Acceptance inventory census</td><td class="num">318 / 318 indexed</td><td class="done"></td></tr>
+      <tr><td>Acceptance scoring coverage</td><td class="num">52 / 318 · 16.35%</td><td class="open"></td></tr>
+      <tr><td>Root acceptance gates</td><td class="num">8 / 8</td><td class="done"></td></tr>
+      <tr><td>TUI functional implementation</td><td class="num">9 / 52 · 17.31%</td><td class="open"></td></tr>
+      <tr><td>TUI visual / interaction parity</td><td class="num">0 / 52</td><td class="open"></td></tr>
+      <tr><td>Whole-product behavioral parity</td><td class="num">not scored</td><td class="open"></td></tr>
+    </table>
+  </div>
+  <p class="fineprint">
+    Figures are generated from the machine-validated checkpoint in <code>docs/PARITY-DASHBOARD.md</code>
+    and <code>docs/EXHAUSTIVE-PARITY-INVENTORY.md</code>. Tests do not count as visual parity until the
+    same presentation is manually compared with official Pi.
+  </p>
+</section>
+
+<section id="run">
+  <div class="sec-label">Try it</div>
+  <h2>Run and verify it yourself.</h2>
+  <div class="build">
+    <span class="p">$</span> <code>git clone &lt;workspace&gt; && cd pi-rust</code><br>
+    <span class="p">$</span> <code>cargo build --release</code><br>
+    <span class="p">$</span> <code>./target/release/pi</code><br>
+    <span class="p">$</span> <code>scripts/gates.sh</code> <span class="dim"># root gates R1–R8</span>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span>pi-rust · MIT · pinned to pi v0.84.2 (<span style="color:var(--text)">5cd93f6</span>)</span>
+    <span>
+      <a href="https://github.com/earendil-works/pi" target="_blank" rel="noopener">upstream pi</a> ·
+      <a href="#parity">parity docs</a>
+    </span>
+  </div>
+</footer>
+
+<div id="toast">copied</div>
+
+<script>
+  const lines = [
+    {html:'<span class="ln prompt">pi "add exponential backoff to pi-ai retries"</span>', pause:420},
+    {html:'<span class="ln dim">read  crates/pi-ai/src/retry.rs</span>', pause:280},
+    {html:'<span class="ln dim">edit  crates/pi-ai/src/retry.rs (+18 −11)</span>', pause:280},
+    {html:'<span class="ln warn">run   cargo test -p pi-ai --release</span>', pause:520},
+    {html:'<span class="ln dim">      test result: <span class="ok">ok</span>. 214 passed; 0 failed; 3.12s</span>', pause:340},
+    {html:'<span class="ln ok">done  retries honor Retry-After. single static binary, no node.</span>', pause:0},
+  ];
+  const term = document.getElementById('term');
+  let i = 0;
+  function typeNext(){
+    if(i >= lines.length){ return; }
+    const l = lines[i++];
+    term.insertAdjacentHTML('beforeend', l.html);
+    setTimeout(typeNext, l.pause);
+  }
+  setTimeout(typeNext, 500);
+
+  function copyCmd(cmd){
+    navigator.clipboard.writeText(cmd).then(()=>{
+      const t=document.getElementById('toast');
+      t.classList.add('show');
+      clearTimeout(window.__tt);
+      window.__tt=setTimeout(()=>t.classList.remove('show'),1400);
+    });
+  }
+</script>
+
+<script>
+/* ---- WebGL2 background: drifting domain-warped noise, very dark, warm ember tint ---- */
+(function(){
+  const canvas = document.getElementById('gl');
+  const gl = canvas.getContext('webgl2', {antialias:false, alpha:false});
+  if(!gl) return; // CSS bg color remains as fallback
+
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches){
+    canvas.style.display='none'; return;
+  }
+
+  const VS = `#version 300 es
+    void main(){
+      vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+      gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+    }`;
+
+  const FS = `#version 300 es
+    precision highp float;
+    uniform vec2  uRes;
+    uniform float uTime;
+    uniform float uScroll;
+    uniform vec2  uMouse;   // smoothed, in aspect-corrected coords
+    uniform float uMouseActive; // fades to 0 when the pointer rests
+    out vec4 outColor;
+
+    float hash(vec2 p){
+      return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+    }
+    float noise(vec2 p){
+      vec2 i = floor(p), f = fract(p);
+      vec2 u = f * f * (3.0 - 2.0 * f);
+      return mix(mix(hash(i),               hash(i + vec2(1,0)), u.x),
+                 mix(hash(i + vec2(0,1)),   hash(i + vec2(1,1)), u.x), u.y);
+    }
+    float fbm(vec2 p){
+      float v = 0.0, a = 0.5;
+      mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
+      for(int i = 0; i < 5; i++){
+        v += a * noise(p);
+        p = m * p;
+        a *= 0.5;
+      }
+      return v;
+    }
+
+    void main(){
+      vec2 uv = gl_FragCoord.xy / uRes;
+      vec2 pos = (gl_FragCoord.xy - 0.5 * uRes) / min(uRes.x, uRes.y);
+      float t = uTime * 0.022;
+
+      // gentle parallax: whole field leans toward the cursor
+      vec2 mo = uMouse * 0.035;
+
+      // domain warp, drifts with scroll and breathes near the cursor
+      vec2 warpOff = vec2(t, -t * 0.6) + uScroll * 0.15;
+      float swirl = 0.35 * exp(-length(pos - uMouse * 0.6) * 1.8);
+      vec2 q = vec2(fbm(pos * 2.4 + warpOff + mo),
+                    fbm(pos * 2.4 + vec2(-t * 0.8, t * 0.5) + mo + swirl));
+      float n = fbm(pos * 2.8 + 2.2 * q);
+
+      // base palette: near-black -> faint slate, single warm accent
+      vec3 base = vec3(0.0627, 0.0627, 0.0784);   // #101014
+      vec3 cool = vec3(0.105, 0.110, 0.140);
+      vec3 ember = vec3(1.00, 0.29, 0.12);         // accent #ff4a1f
+
+      vec3 col = base;
+      col += cool * smoothstep(0.35, 0.85, n) * 0.55;          // soft slate haze
+      float veins = smoothstep(0.62, 0.92,
+                  fbm(pos * 3.4 + 2.0 * q - t * 0.4));         // thin ember filaments
+      col += ember * pow(veins, 2.2) * 0.10;
+
+      // top glow behind the hero, fades on scroll
+      float glow = exp(-length(pos * vec2(1.5, 2.6)) * 2.4);
+      col += ember * glow * 0.030 * (1.0 - clamp(uScroll * 1.6, 0.0, 1.0));
+
+      // faint ember bloom trailing the cursor (suppressed at rest)
+      float mouseGlow = exp(-length((pos - uMouse * 0.7) * vec2(1.3, 1.0)) * 3.2);
+      col += ember * mouseGlow * 0.028 * uMouseActive;
+
+      // vignette + grain
+      col *= 1.0 - 0.42 * dot(uv - 0.5, uv - 0.5) * 2.0;
+      col += (hash(gl_FragCoord.xy + uTime) - 0.5) * 0.016;
+
+      outColor = vec4(col, 1.0);
+    }`;
+
+  function compile(type, src){
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
+      console.warn(gl.getShaderInfoLog(s));
+      return null;
+    }
+    return s;
+  }
+  const vs = compile(gl.VERTEX_SHADER, VS);
+  const fs = compile(gl.FRAGMENT_SHADER, FS);
+  if(!vs || !fs) return;
+
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)){
+    console.warn(gl.getProgramInfoLog(prog));
+    return;
+  }
+  gl.useProgram(prog);
+
+  // fullscreen triangle via drawArrays — no buffers needed
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+
+  const uRes    = gl.getUniformLocation(prog, 'uRes');
+  const uTime   = gl.getUniformLocation(prog, 'uTime');
+  const uScroll = gl.getUniformLocation(prog, 'uScroll');
+  const uMouse  = gl.getUniformLocation(prog, 'uMouse');
+  const uMouseActive = gl.getUniformLocation(prog, 'uMouseActive');
+
+  let dpr = 1, hidden = false;
+  function resize(){
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // cap fill-rate: shader is ~5 octaves of fbm
+    const scale = innerWidth > 1400 ? dpr * 0.75 : dpr;
+    canvas.width  = Math.floor(innerWidth  * scale);
+    canvas.height = Math.floor(innerHeight * scale);
+    canvas.style.width  = innerWidth + 'px';
+    canvas.style.height = innerHeight + 'px';
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  }
+  resize();
+  addEventListener('resize', resize);
+
+  document.addEventListener('visibilitychange', () => { hidden = document.hidden; });
+
+  let scrollTarget = 0, scrollSmooth = 0;
+  addEventListener('scroll', () => {
+    scrollTarget = scrollY / Math.max(1, document.body.scrollHeight - innerHeight);
+  }, {passive:true});
+
+  // mouse: raw target -> smoothed value; activity decays back to 0 at rest
+  const mTarget = {x:0, y:0};
+  const mSmooth = {x:0, y:0};
+  let activeTarget = 0;
+  addEventListener('pointermove', (e) => {
+    const min = Math.min(innerWidth, innerHeight);
+    // same space as `pos` in the shader, y flipped to match gl_FragCoord
+    mTarget.x = (e.clientX - innerWidth  * 0.5) / min;
+    mTarget.y = (innerHeight * 0.5 - e.clientY) / min;
+    activeTarget = 1;
+  }, {passive:true});
+  let active = 0;
+
+  const t0 = performance.now();
+  function frame(now){
+    requestAnimationFrame(frame);
+    if(hidden) return;
+    scrollSmooth += (scrollTarget - scrollSmooth) * 0.05;
+    mSmooth.x += (mTarget.x - mSmooth.x) * 0.04;
+    mSmooth.y += (mTarget.y - mSmooth.y) * 0.04;
+    active  += (activeTarget - active) * 0.05;
+    activeTarget *= 0.985; // decay: stops feeding "active" once movement ceases
+    gl.uniform2f(uRes, canvas.width, canvas.height);
+    gl.uniform1f(uTime, (now - t0) / 1000);
+    gl.uniform1f(uScroll, scrollSmooth);
+    gl.uniform2f(uMouse, mSmooth.x, mSmooth.y);
+    gl.uniform1f(uMouseActive, active);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
